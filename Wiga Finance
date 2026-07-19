@@ -1,0 +1,99 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from src.chatbot import WigaFinanceAI
+from src.calculator import calcular_juros_compostos
+
+# Configuração da Página
+st.set_page_config(
+    page_title="WIGA Finance | Experiência Digital Inteligente",
+    page_icon="💡",
+    layout="wide"
+)
+
+# Inicialização de Estados
+if "historico" not in st.session_state:
+    st.session_state.historico = []
+if "mensagens_chat" not in st.session_state:
+    st.session_state.mensagens_chat = []
+
+ai = WigaFinanceAI()
+
+# Sidebar de Navegação
+st.sidebar.title("🧭 WIGA Finance")
+st.sidebar.markdown("Sua experiência financeira guiada por IA.")
+pagina = st.sidebar.radio("Navegue pelas funcionalidades:", ["Chat Inteligente (IA)", "Simulador de Investimentos", "Análise de Gastos (Dados)"])
+
+# -------------------------------------------------------------
+# PÁGINA 1: CHAT INTELIGENTE COM IA GENERATIVA
+# -------------------------------------------------------------
+if pagina == "Chat Inteligente (IA)":
+    st.title("💬 Assistente Virtual WIGA")
+    st.markdown("Tire dúvidas sobre produtos financeiros, faça consultas em linguagem natural e receba orientações personalizadas.")
+
+    # Exibição do Histórico de Conversa
+    for msg in st.session_state.mensagens_chat:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    # Entrada do Usuário
+    prompt = st.chat_input("Digite sua dúvida financeira aqui...")
+    if prompt:
+        st.session_state.mensagens_chat.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analisando com IA..."):
+                resposta = ai.responder(st.session_state.historico, prompt)
+                st.markdown(resposta)
+                st.session_state.historico.append(prompt)
+                st.session_state.historico.append(resposta)
+                st.session_state.mensagens_chat.append({"role": "assistant", "content": resposta})
+
+# -------------------------------------------------------------
+# PÁGINA 2: SIMULADOR DE INVESTIMENTOS
+# -------------------------------------------------------------
+elif pagina == "Simulador de Investimentos":
+    st.title("📈 Simulador Financeiro Demonstrativo")
+    st.markdown("Projete o crescimento do seu patrimônio com base em aportes mensais e juros compostos.")
+
+    col1, col2 = st.columns(1)
+    
+    with st.container():
+        capital_inicial = st.number_input("Capital Inicial (R$)", value=1000.0, step=100.0)
+        aporte_mensal = st.number_input("Aporte Mensal (R$)", value=300.0, step=50.0)
+        taxa_anual = st.slider("Taxa de Retorno Anual Esperada (%)", min_value=1.0, max_value=20.0, value=8.0) / 100.0
+        anos = st.slider("Prazo (Anos)", min_value=1, max_value=30, value=5)
+
+        if st.button("Calcular Projeção"):
+            montante_final, evolucao = calcular_juros_compostos(capital_inicial, aporte_mensal, taxa_anual, anos)
+            
+            st.success(f"Montante Total Acumulado em {anos} anos: **R$ {montante_final:,.2f}**")
+            
+            df_evolucao = pd.DataFrame(evolucao)
+            fig = px.line(df_evolucao, x="Ano", y="Montante Acumulado", markers=True, title="Evolução Patrimonial ao Longo dos Anos")
+            st.plotly_chart(fig, use_container_width=True)
+
+# -------------------------------------------------------------
+# PÁGINA 3: ANÁLISE DE GASTOS (DADOS)
+# -------------------------------------------------------------
+elif pagina == "Análise de Gastos (Dados)":
+    st.title("📊 Painel de Transações e Insights")
+    st.markdown("Visualização integrada de dados para apoiar o seu controle financeiro.")
+
+    try:
+        df = pd.read_csv("data/historico_transacoes.csv")
+        st.dataframe(df, use_container_width=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_cat = px.pie(df[df['tipo'] == 'Débito'], names='categoria', values='valor', title="Gastos por Categoria")
+            st.plotly_chart(fig_cat, use_container_width=True)
+            
+        with col2:
+            fig_bar = px.bar(df, x='data', y='valor', color='categoria', title="Transações ao Longo do Tempo")
+            st.plotly_chart(fig_bar, use_container_width=True)
+            
+    except Exception as e:
+        st.error(f"Erro ao carregar os dados de transações: {e}")
